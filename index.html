@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Real Estate Return Calculator</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f7f8;
+    color: #333;
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #1a73e8;
+  }
+  form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 25px;
+  }
+  label {
+    flex: 1 1 200px;
+    min-width: 160px;
+    font-weight: 600;
+  }
+  input, select {
+    flex: 1 1 200px;
+    padding: 8px 10px;
+    font-size: 1rem;
+    border: 1.5px solid #ccc;
+    border-radius: 6px;
+    outline-offset: 2px;
+    transition: border-color 0.3s ease;
+  }
+  input:focus, select:focus {
+    border-color: #1a73e8;
+  }
+  button {
+    background-color: #1a73e8;
+    color: white;
+    font-size: 1.1rem;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 10px;
+    flex-basis: 100%;
+    max-width: 300px;
+    align-self: center;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background-color: #155ab6;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 35px;
+    background: white;
+    box-shadow: 0 4px 15px rgb(0 0 0 / 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 14px 20px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+  }
+  th {
+    background-color: #1a73e8;
+    color: white;
+    font-weight: 700;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  td.amount {
+    text-align: right;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+    color: #222;
+  }
+  tr:hover {
+    background-color: #f0f7ff;
+  }
+
+  @media (max-width: 600px) {
+    form label, form input {
+      flex: 1 1 100%;
+    }
+    button {
+      max-width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Real Estate Return Calculator</h1>
+
+<form id="calcForm">
+  <label>
+    Flat Total Cost (₹):
+    <input type="text" id="flatCost" placeholder="e.g. 1,00,00,000" required />
+  </label>
+  <label>
+    Down Payment (₹):
+    <input type="text" id="downPayment" placeholder="e.g. 10,00,000" required />
+  </label>
+  <label>
+    Expected Selling Price (₹):
+    <input type="text" id="sellPrice" placeholder="e.g. 1,33,00,000" required />
+  </label>
+  <label>
+    Annual Interest Rate (%):
+    <input type="number" id="annualInterestRate" step="0.01" min="0" placeholder="e.g. 8.5" required />
+  </label>
+  <label>
+    Loan Duration (Years):
+    <input type="number" id="loanDurationYears" min="1" placeholder="e.g. 20" required />
+  </label>
+  <label>
+    Construction Duration (Years):
+    <input type="number" id="constructionYears" step="0.1" min="0" placeholder="e.g. 3" required />
+  </label>
+  <label>
+    Disbursals Per Year:
+    <select id="disbursalsPerYear" required>
+      <option value="1">1 (Yearly)</option>
+      <option value="2">2 (Half-Yearly)</option>
+      <option value="3">3 (Every 4 months)</option>
+      <option value="4" selected>4 (Quarterly)</option>
+      <option value="12">12 (Monthly)</option>
+    </select>
+  </label>
+  <label>
+    Selling Month:
+    <input type="number" id="saleMonth" min="1" placeholder="e.g. 30" required />
+  </label>
+  <label style="flex-basis: 100%; font-weight: 600; margin-top: 10px;">
+    <input type="checkbox" id="showAmortization" /> Show Amortization Breakdown
+  </label>
+  <button type="submit">Calculate</button>
+</form>
+
+<!-- Result Table -->
+<table id="resultTable" style="display:none;">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th>Amount (₹)</th>
+    </tr>
+  </thead>
+  <tbody id="resultBody"></tbody>
+</table>
+
+<script>
+  function parseIndianCurrency(input) {
+    // Remove commas and parse float
+    return parseFloat(input.replace(/,/g, ''));
+  }
+
+  function formatIndianCurrency(amount) {
+    if (isNaN(amount)) return '-';
+    // Format with Indian grouping (1,23,45,678)
+    const x = amount.toFixed(0);
+    let lastThree = x.substring(x.length - 3);
+    let otherNumbers = x.substring(0, x.length - 3);
+    if (otherNumbers !== '') lastThree = ',' + lastThree;
+    const res = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + lastThree;
+    return res;
+  }
+
+  function formatWithWords(amount) {
+    if (isNaN(amount)) return '-';
+    if (amount >= 10000000) return formatIndianCurrency(amount) + " (" + (amount / 10000000).toFixed(1) + "Cr)";
+    if (amount >= 100000) return formatIndianCurrency(amount) + " (" + (amount / 100000).toFixed(1) + "L)";
+    return formatIndianCurrency(amount);
+  }
+
+  function clearTable() {
+    const tbody = document.getElementById('resultBody');
+    tbody.innerHTML = '';
+  }
+
+  function addRow(desc, amount, isSub = false) {
+    const tbody = document.getElementById('resultBody');
+    const tr = document.createElement('tr');
+    if (isSub) tr.style.backgroundColor = '#f9faff';
+
+    const tdDesc = document.createElement('td');
+    tdDesc.textContent = desc;
+    tdDesc.style.paddingLeft = isSub ? '20px' : '10px';
+    tdDesc.style.fontWeight = isSub ? '500' : '700';
+
+    const tdAmount = document.createElement('td');
+    tdAmount.className = 'amount';
+    tdAmount.textContent = amount;
+
+    tr.appendChild(tdDesc);
+    tr.appendChild(tdAmount);
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('calcForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    // Read and parse inputs
+    try {
+      const flatCost = parseIndianCurrency(document.getElementById('flatCost').value);
+      const downPayment = parseIndianCurrency(document.getElementById('downPayment').value);
+      const sellPrice = parseIndianCurrency(document.getElementById('sellPrice').value);
+      const annualInterestRate = parseFloat(document.getElementById('annualInterestRate').value);
+      const monthlyInterestRate = annualInterestRate / 12 / 100;
+      const loanDurationYears = parseInt(document.getElementById('loanDurationYears').value, 10);
+      const loanDurationMonths = loanDurationYears * 12;
+      const constructionYears = parseFloat(document.getElementById('constructionYears').value);
+      const constructionMonths = Math.round(constructionYears * 12);
+      const disbursalsPerYear = parseInt(document.getElementById('disbursalsPerYear').value, 10);
+      const saleMonth = parseInt(document.getElementById('saleMonth').value, 10);
+      const showAmortization = document.getElementById('showAmortization').checked;
+
+      if (saleMonth >= constructionMonths) {
+        alert(`Error: You must sell the flat *before* construction is completed (${constructionMonths} months).`);
+        return;
+      }
+
+      // Loan calculations
+      const loanAmount = flatCost - downPayment;
+      const totalDisbursals = Math.round(constructionYears * disbursalsPerYear);
+      const disbursalAmount = loanAmount / totalDisbursals;
+      const monthsPerDisbursal = 12 / disbursalsPerYear;
+
+      let currentLoan = 0;
+      let interestPaid = 0;
+      let principalPaid = 0;
+      let totalEmiPaid = 0;
+      let lastEmi = 0;
+
+      // Amortization output container
+      let amortizationLines = [];
+
+      for (let month = 1; month <= saleMonth; month++) {
+        // Disburse loan in intervals
+        if ((month - 1) % monthsPerDisbursal === 0 && (month / monthsPerDisbursal) <= totalDisbursals) {
+          currentLoan += disbursalAmount;
+        }
+
+        // EMI calculation
+        if (currentLoan > 0) {
+          const remainingMonths = loanDurationMonths - month + 1;
+          const pow = Math.pow(1 + monthlyInterestRate, remainingMonths);
+          const emi = currentLoan * monthlyInterestRate * pow / (pow - 1);
+          lastEmi = emi;
+
+          const interest = currentLoan * monthlyInterestRate;
+          const principal = emi - interest;
+
+          interestPaid += interest;
+          principalPaid += principal;
+          currentLoan -= principal;
+          totalEmiPaid += emi;
+
+          if (showAmortization) {
+            amortizationLines.push(
+              `Month ${month} => EMI: ₹${formatIndianCurrency(emi)} | Interest: ₹${formatIndianCurrency(interest)} | Principal: ₹${formatIndianCurrency(principal)} | Balance: ₹${formatIndianCurrency(currentLoan)}`
+            );
+          }
+        }
+      }
+
+      const remainingPrincipal = currentLoan;
+      const disbursedLoanAmount = principalPaid + remainingPrincipal;
+      const amountBuyerPaysToBuilder = loanAmount - disbursedLoanAmount;
+      const amountBuyerPaysToBank = remainingPrincipal;
+      const amountBuyerPaysToYou = sellPrice - amountBuyerPaysToBank - amountBuyerPaysToBuilder;
+      const totalInvestmentByYou = downPayment + totalEmiPaid;
+      const netProfit = amountBuyerPaysToYou - totalInvestmentByYou;
+      const roi = (netProfit / totalInvestmentByYou) * 100;
+
+      // Show result table
+      document.getElementById('resultTable').style.display = 'table';
+      clearTable();
+
+      addRow("Flat Sale Price", formatWithWords(sellPrice));
+      addRow("Paid by You (Down Payment)", formatWithWords(downPayment));
+      addRow("My Total Initial Loan Amount", formatWithWords(loanAmount));
+      addRow("Monthly EMI at time of exit", formatWithWords(lastEmi));
+      addRow("Total Paid by Me in EMI", formatWithWords(totalEmiPaid));
+      addRow("  -> Interest Component", formatWithWords(interestPaid), true);
+      addRow("  -> Principal Component", formatWithWords(principalPaid), true);
+      addRow("Remaining Principal (Paid by Buyer to Bank)", formatWithWords(remainingPrincipal));
+      addRow("Total Paid by Bank to Builder Before Exit", formatWithWords(disbursedLoanAmount));
+      addRow("Buyer Pays Builder (Remaining Undisbursed Loan)", formatWithWords(amountBuyerPaysToBuilder));
+      addRow("Buyer Pays Bank", formatWithWords(amountBuyerPaysToBank));
+      addRow("Buyer Pays You", formatWithWords(amountBuyerPaysToYou));
+      addRow("", "");
+      addRow("Your Profit = Amount You Receive - Amount You Paid", "");
+      addRow(`= ${formatWithWords(amountBuyerPaysToYou)} − ${formatWithWords(totalInvestmentByYou)}`, "");
+      addRow(`= ${formatWithWords(netProfit)}`, "");
+      addRow(`ROI: ${roi.toFixed(2)}%`, "");
+      addRow("", "");
+      addRow("Breakdown of 'Amount You Paid'", "");
+      addRow("Down Payment", formatWithWords(downPayment));
+      addRow("Total EMI Paid", formatWithWords(totalEmiPaid));
+      addRow("  -> Interest", formatWithWords(interestPaid), true);
+      addRow("  -> Principal", formatWithWords(principalPaid), true);
+      addRow("Total Paid by You (Down + EMI)", formatWithWords(totalInvestmentByYou));
+      addRow("", "");
+      addRow("Detailed Loan Calculation", "");
+      const disbursalsTillSale = Math.ceil(saleMonth / monthsPerDisbursal);
+      const totalAskedByBuilder = disbursalsTillSale * disbursalAmount;
+      addRow(`Amount Asked by Builder till Month ${saleMonth}`, `${disbursalsTillSale} × ${formatWithWords(disbursalAmount)} = ${formatWithWords(totalAskedByBuilder)}`);
+      addRow("Less: Principal Paid by You", formatWithWords(principalPaid));
+      addRow("= Remaining Principal (Paid by Buyer to Bank)", formatWithWords(remainingPrincipal));
+
+      // If amortization is requested, also show in console for now
+      if (showAmortization) {
+        console.log("Amortization Breakdown:");
+        amortizationLines.forEach(line => console.log(line));
+      }
+
+    } catch (err) {
+      alert("Invalid input! Please check all fields and try again.");
+      console.error(err);
+    }
+  });
+</script>
+
+</body>
+</html>
